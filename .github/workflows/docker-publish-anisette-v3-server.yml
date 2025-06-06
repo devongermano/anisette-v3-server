@@ -1,65 +1,68 @@
-# .github/workflows/docker-publish.yml
 name: Publish anisette-v3-server Docker image
 
 on:
   push:
-    branches: [main]           # build every commit to main
-  release:                     # build on GitHub “Create release” / semver tag
+    branches: [main]          # every commit to main
+  release:                    # when you click “Publish release” (v1.2.0, etc.)
     types: [published]
-  workflow_dispatch:           # allow manual trigger
+  workflow_dispatch:          # manual run button
 
 jobs:
   docker:
     runs-on: ubuntu-latest
+
+    # Built-in GITHUB_TOKEN gets “contents:read, packages:write” by default.
+    # Explicit block keeps it obvious and future-proof.
     permissions:
-      contents: read           # needed for checkout + metadata action
-      packages: write          # future-proofing; fine to keep
+      contents: read
+      packages: write
 
     steps:
-      # 1. Checkout repo
+      # 1  Check out the repo
       - uses: actions/checkout@v4
 
-      # 2. Enable cross-arch emulation (needed for arm builds on x86 runner)
+      # 2  Enable cross-arch emulation (needed for arm builds on x86 runner)
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      # 3. Enable Buildx (buildx = multi-stage, multi-arch builder)
+      # 3  Enable Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 4. Derive tags & labels (latest, sha, semver) ------------------------
-      - name: Extract Docker metadata
+      # 4  Derive tags + OCI labels automatically
+      - name: Extract metadata (tags & labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: dadoum/anisette-v3-server
-          # You can tweak these; common combo shown below
+          # ghcr.io/<owner>/<repo>, e.g. ghcr.io/dadoum/anisette-v3-server
+          images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=latest                 # always push :latest
-            type=sha,format=short                 # :<8-char-sha>
-            type=semver,pattern={{version}}       # :1.2.3 when pushing a v1.2.3 release
+            type=raw,value=latest          # :latest
+            type=sha,format=short          # :8c97d1f
+            type=semver,pattern={{version}}# :1.2.3 on releases
           labels: |
             org.opencontainers.image.source=${{ github.repositoryUrl }}
             org.opencontainers.image.revision=${{ github.sha }}
 
-      # 5. Log in to Docker Hub
-      - name: Login to Docker Hub
+      # 5  Authenticate to GHCR (no PAT needed for same-repo push)
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}          # repository owner
+          password: ${{ secrets.GITHUB_TOKEN }}  # provided automatically
 
-      # 6. Build & push
+      # 6  Build & push the image
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile              # change if your Dockerfile has a different path
+          file: ./Dockerfile                # adjust if your Dockerfile lives elsewhere
           push: true
-          # Multi-arch targets (trim if you don’t need all of them)
+          # Keep whatever architectures you actually need
           platforms: linux/386,linux/amd64,linux/arm/v7,linux/arm64/v8
-          tags: ${{ steps.meta.outputs.tags }}
+          tags:   ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Optional: caching to speed things up
+          # Layer-cache speed-up (uncomment if desired)
           # cache-from: type=gha
           # cache-to:   type=gha,mode=max
