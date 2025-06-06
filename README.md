@@ -26,4 +26,4 @@ If you want to quickly setup anisette-v3 with ansible, just use the setup-aniset
 Setup your inventory and choose your desired host in the playbook. Tweak your parameters/ansible.cfg for the remote_user you use. Requires root.
 ```bash
 ansible-playbook -i inventory setup-anisette-v3-ansible.yaml -k
-``` 
+```
